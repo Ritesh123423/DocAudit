@@ -16,7 +16,9 @@ pulled out automatically:
 Click **View text** on any document to see its extraction status and the
 extracted text itself. Click **Reprocess** to re-run extraction on a document
 that's already stored — useful if it was uploaded before OCR was configured,
-or before a later update to the extraction logic.
+or before a later update to the extraction logic. Click **Delete** to remove
+a document (and its stored file) entirely — useful for clearing out test
+uploads. This is not undoable.
 
 Later phases add AI-assisted analysis (classification, risk flags, figure
 verification, SOP process walkthroughs) and Word/Excel export.

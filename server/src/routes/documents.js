@@ -210,6 +210,40 @@ router.post(
 );
 
 /**
+ * DELETE /api/documents/:id
+ * Deletes a document's stored file from GridFS and its metadata record.
+ * Useful for clearing out test uploads. Not undoable.
+ */
+router.delete(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const bucket = getBucket();
+
+    const doc = await db.collection("documents").findOne({ documentId: req.params.id });
+
+    if (!doc) {
+      const err = new Error("Document not found");
+      err.status = 404;
+      err.publicMessage = "No document found with that id.";
+      throw err;
+    }
+
+    try {
+      await bucket.delete(new ObjectId(doc.gridfsFileId));
+    } catch (err) {
+      // If the GridFS file is already missing (e.g. a previous partial
+      // delete), don't block removing the now-orphaned metadata record.
+      if (!/file not found/i.test(err.message)) throw err;
+    }
+
+    await db.collection("documents").deleteOne({ documentId: req.params.id });
+
+    res.status(204).end();
+  })
+);
+
+/**
  * GET /api/documents/:id/file
  * Streams the original file back from GridFS.
  */

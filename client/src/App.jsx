@@ -38,6 +38,14 @@ export default function App() {
     loadDocuments();
   }, [loadDocuments]);
 
+  const handleDeleted = useCallback(
+    (deletedDocumentId) => {
+      setSelectedDocumentId((current) => (current === deletedDocumentId ? null : current));
+      refreshDocumentsSilently();
+    },
+    [refreshDocumentsSilently]
+  );
+
   return (
     <div className="page">
       <header>
@@ -58,6 +66,7 @@ export default function App() {
           error={error}
           onViewText={setSelectedDocumentId}
           onReprocessed={refreshDocumentsSilently}
+          onDeleted={handleDeleted}
         />
       </section>
 

@@ -140,6 +140,10 @@ header h1 {
   text-decoration: underline;
 }
 
+.link-button-danger {
+  color: #c0392b;
+}
+
 .link-button:disabled {
   color: #aaa;
   cursor: not-allowed;

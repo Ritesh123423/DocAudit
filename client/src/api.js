@@ -47,3 +47,10 @@ export async function reprocessDocument(documentId) {
   });
   return parseJsonOrThrow(res);
 }
+
+export async function deleteDocument(documentId) {
+  const res = await fetch(`${API_BASE_URL}/api/documents/${documentId}`, {
+    method: "DELETE",
+  });
+  return parseJsonOrThrow(res);
+}

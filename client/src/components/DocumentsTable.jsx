@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { fileDownloadUrl, reprocessDocument } from "../api.js";
+import { fileDownloadUrl, reprocessDocument, deleteDocument } from "../api.js";
 import { getStatusInfo } from "../statusLabels.js";
 
 function formatDate(isoString) {
@@ -7,20 +7,37 @@ function formatDate(isoString) {
   return date.toLocaleString();
 }
 
-export default function DocumentsTable({ documents, isLoading, error, onViewText, onReprocessed }) {
+export default function DocumentsTable({ documents, isLoading, error, onViewText, onReprocessed, onDeleted }) {
   const [reprocessingId, setReprocessingId] = useState(null);
-  const [reprocessError, setReprocessError] = useState("");
+  const [deletingId, setDeletingId] = useState(null);
+  const [actionError, setActionError] = useState("");
 
   async function handleReprocess(documentId) {
     setReprocessingId(documentId);
-    setReprocessError("");
+    setActionError("");
     try {
       await reprocessDocument(documentId);
       onReprocessed();
     } catch (err) {
-      setReprocessError(err.message || "Reprocessing failed.");
+      setActionError(err.message || "Reprocessing failed.");
     } finally {
       setReprocessingId(null);
+    }
+  }
+
+  async function handleDelete(documentId, filename) {
+    const confirmed = window.confirm(`Delete "${filename}"? This cannot be undone.`);
+    if (!confirmed) return;
+
+    setDeletingId(documentId);
+    setActionError("");
+    try {
+      await deleteDocument(documentId);
+      onDeleted(documentId);
+    } catch (err) {
+      setActionError(err.message || "Delete failed.");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -38,7 +55,7 @@ export default function DocumentsTable({ documents, isLoading, error, onViewText
 
   return (
     <>
-      {reprocessError && <p className="form-error">{reprocessError}</p>}
+      {actionError && <p className="form-error">{actionError}</p>}
       <table className="documents-table">
         <thead>
           <tr>
@@ -52,6 +69,8 @@ export default function DocumentsTable({ documents, isLoading, error, onViewText
           {documents.map((doc) => {
             const statusInfo = getStatusInfo(doc.status);
             const isReprocessing = reprocessingId === doc.documentId;
+            const isDeleting = deletingId === doc.documentId;
+            const rowDisabled = isReprocessing || isDeleting;
             return (
               <tr key={doc.documentId}>
                 <td>{doc.originalFilename}</td>
@@ -69,10 +88,18 @@ export default function DocumentsTable({ documents, isLoading, error, onViewText
                   <button
                     type="button"
                     className="link-button"
-                    disabled={isReprocessing}
+                    disabled={rowDisabled}
                     onClick={() => handleReprocess(doc.documentId)}
                   >
                     {isReprocessing ? "Reprocessing..." : "Reprocess"}
+                  </button>
+                  <button
+                    type="button"
+                    className="link-button link-button-danger"
+                    disabled={rowDisabled}
+                    onClick={() => handleDelete(doc.documentId, doc.originalFilename)}
+                  >
+                    {isDeleting ? "Deleting..." : "Delete"}
                   </button>
                 </td>
               </tr>
