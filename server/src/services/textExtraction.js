@@ -1,28 +1,65 @@
 const mammoth = require("mammoth");
 const pdfParse = require("pdf-parse");
 const ExcelJS = require("exceljs");
+const { runOcr, REASON: OCR_REASON } = require("./ocrExtraction");
 
 // Extraction outcomes. These become the document's "status" field.
 const STATUS = {
   EXTRACTED: "extracted",
   NEEDS_OCR: "needs_ocr",
+  OCR_FAILED: "ocr_failed",
   UNSUPPORTED: "extraction_unsupported",
   FAILED: "extraction_failed",
 };
 
+// File types OCR.space can actually process. A docx/xlsx with no text isn't
+// something we can hand to an image/PDF OCR service, so those stay needs_ocr.
+const OCR_CAPABLE_MIME_TYPES = new Set(["application/pdf", "image/png", "image/jpeg", "image/tiff"]);
+
 // Below this many non-whitespace characters per PDF page, we assume the PDF
-// is a scan (image-only) rather than real text, and route it to OCR later.
+// is a scan (image-only) rather than real text, and route it to OCR.
 const MIN_CHARS_PER_PAGE_FOR_TEXT_PDF = 20;
 
 /**
  * Extracts plain text from a document buffer based on its MIME type.
- * Never throws for "this file needs OCR" or "we don't support this format yet" —
+ * Tries native extraction first (docx/PDF/xlsx parsing); if that comes back
+ * needing OCR and the file type is one OCR.space can handle, automatically
+ * falls back to OCR before giving up.
+ * Never throws for "needs OCR", "unsupported format", or "OCR failed" —
  * those are expected outcomes represented in the returned status, not errors.
  * Only throws for genuine failures (corrupt file, parser crash).
  *
- * @returns {Promise<{status: string, text: string, note: string}>}
+ * @returns {Promise<{status: string, text: string, note: string, extractionMethod: string|null}>}
  */
-async function extractText({ buffer, mimeType }) {
+async function extractText({ buffer, mimeType, originalFilename }) {
+  const nativeResult = await extractNative(buffer, mimeType);
+
+  if (nativeResult.status !== STATUS.NEEDS_OCR || !OCR_CAPABLE_MIME_TYPES.has(mimeType)) {
+    return { ...nativeResult, extractionMethod: nativeResult.status === STATUS.EXTRACTED ? "native" : null };
+  }
+
+  const ocrResult = await runOcr({ buffer, mimeType, filename: originalFilename });
+
+  if (ocrResult.success) {
+    return { status: STATUS.EXTRACTED, text: ocrResult.text, note: "", extractionMethod: "ocr" };
+  }
+
+  // OCR being unavailable (not configured, or this file type isn't OCR-capable)
+  // is a different state from OCR being attempted and actually failing: the
+  // former should stay "needs_ocr" (try again once configured), not read as
+  // an error that occurred.
+  const isUnavailable =
+    ocrResult.reason === OCR_REASON.NOT_CONFIGURED || ocrResult.reason === OCR_REASON.UNSUPPORTED_TYPE;
+
+  return {
+    status: isUnavailable ? STATUS.NEEDS_OCR : STATUS.OCR_FAILED,
+    text: "",
+    note: ocrResult.errorMessage,
+    extractionMethod: null,
+  };
+}
+
+async function extractNative(buffer, mimeType) {
   switch (mimeType) {
     case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
       return extractFromDocx(buffer);
@@ -53,7 +90,7 @@ async function extractText({ buffer, mimeType }) {
       return {
         status: STATUS.NEEDS_OCR,
         text: "",
-        note: "This is an image file. It needs OCR to extract text (coming in the next phase).",
+        note: "This is an image file. Attempting OCR.",
       };
 
     default:
@@ -74,7 +111,7 @@ async function extractFromDocx(buffer) {
       return {
         status: STATUS.NEEDS_OCR,
         text: "",
-        note: "No text could be extracted from this Word document. It may consist only of images.",
+        note: "No text could be extracted from this Word document. It may consist only of images. OCR does not support .docx directly, so this stays flagged rather than being auto-resolved.",
       };
     }
 
@@ -99,7 +136,7 @@ async function extractFromPdf(buffer) {
       return {
         status: STATUS.NEEDS_OCR,
         text,
-        note: "This PDF appears to be a scanned document with little or no embedded text. It needs OCR to extract text (coming in the next phase).",
+        note: "This PDF appears to be a scanned document with little or no embedded text. Attempting OCR.",
       };
     }
 

@@ -40,3 +40,10 @@ export async function uploadDocument(file) {
 export function fileDownloadUrl(documentId) {
   return `${API_BASE_URL}/api/documents/${documentId}/file`;
 }
+
+export async function reprocessDocument(documentId) {
+  const res = await fetch(`${API_BASE_URL}/api/documents/${documentId}/reprocess`, {
+    method: "POST",
+  });
+  return parseJsonOrThrow(res);
+}

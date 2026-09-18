@@ -7,16 +7,19 @@ pulled out automatically:
 - **.docx** — extracted with Mammoth
 - **Native (text-based) PDF** — extracted with pdf-parse
 - **.xlsx** — every sheet's cell data extracted with ExcelJS
-- **Scanned PDFs, images, and legacy .doc/.xls** — flagged with a clear status
-  (`Needs OCR` or `Format not supported yet`) rather than failing silently.
-  OCR support for these is the next phase.
+- **Scanned PDFs and images (PNG/JPEG/TIFF)** — automatically OCR'd via the
+  OCR.space free API once you've set `OCR_SPACE_API_KEY` (see setup below).
+  Without that key set, these are flagged **Needs OCR** rather than failing.
+- **Legacy .doc/.xls** — flagged **Format not supported yet** (re-save as
+  .docx/.xlsx and re-upload).
 
 Click **View text** on any document to see its extraction status and the
-extracted text itself.
+extracted text itself. Click **Reprocess** to re-run extraction on a document
+that's already stored — useful if it was uploaded before OCR was configured,
+or before a later update to the extraction logic.
 
-Later phases add OCR for scanned documents, AI-assisted analysis
-(classification, risk flags, figure verification, SOP process walkthroughs),
-and Word/Excel export.
+Later phases add AI-assisted analysis (classification, risk flags, figure
+verification, SOP process walkthroughs) and Word/Excel export.
 
 ## Stack
 
@@ -44,7 +47,18 @@ and Word/Excel export.
    `mongodb+srv://<username>:<password>@<cluster-url>/audit-doc-analyzer?retryWrites=true&w=majority`
    This full string is your `MONGODB_URI`.
 
-## 2. Running locally
+## 2. One-time setup: OCR.space (for scanned PDFs and images)
+
+This is optional — without it, scanned documents and images are still
+uploaded and stored, just flagged **Needs OCR** instead of having their text
+extracted. To enable OCR:
+
+1. Go to https://ocr.space/ocrapi
+2. Click **Free API Key**
+3. Enter your email — the key arrives instantly, no credit card needed
+4. Save that key — this is your `OCR_SPACE_API_KEY`
+
+## 3. Running locally
 
 You'll need Node.js 18 or later installed.
 
@@ -57,7 +71,8 @@ cp server/.env.example server/.env
 cp client/.env.example client/.env
 ```
 
-Edit `server/.env` and set `MONGODB_URI` to the connection string from step 1.
+Edit `server/.env` and set `MONGODB_URI` to the connection string from step 1,
+and `OCR_SPACE_API_KEY` to the key from step 2 (leave it blank to skip OCR).
 Leave `CLIENT_ORIGIN` and the client's `VITE_API_BASE_URL` as their local
 defaults — they're already set for `http://localhost:5173` and
 `http://localhost:3001`.
@@ -74,7 +89,7 @@ npm run dev
 Upload a test file and confirm it appears in the table and downloads back
 correctly.
 
-## 3. Pushing to GitHub
+## 4. Pushing to GitHub
 
 ```bash
 git init
@@ -89,7 +104,7 @@ Your `.env` files are excluded by `.gitignore` and will not be pushed —
 only `.env.example` is committed. This is intentional: your Atlas
 credentials should never go into GitHub.
 
-## 4. Deploying on Render
+## 5. Deploying on Render
 
 This repo includes a `render.yaml` "Blueprint" that defines both services.
 
@@ -100,7 +115,7 @@ This repo includes a `render.yaml` "Blueprint" that defines both services.
    - `audit-doc-analyzer-client` (static site)
 4. Click **Apply**. Render will create both services and try to build them.
    The first build may fail or the app may not work yet — that's expected,
-   because two environment variables still need real values (see next step).
+   because environment variables still need real values (see next step).
 5. Once both services exist, note their URLs from the Render dashboard
    (something like `https://audit-doc-analyzer-server.onrender.com` and
    `https://audit-doc-analyzer-client.onrender.com`).
@@ -108,6 +123,7 @@ This repo includes a `render.yaml` "Blueprint" that defines both services.
    service has its own **Environment** tab):
    - On `audit-doc-analyzer-server`:
      - `MONGODB_URI` — your Atlas connection string from step 1
+     - `OCR_SPACE_API_KEY` — your key from step 2 (optional; skip to leave OCR off)
      - `CLIENT_ORIGIN` — your client service's URL (from step 5)
    - On `audit-doc-analyzer-client`:
      - `VITE_API_BASE_URL` — your server service's URL (from step 5)
@@ -116,6 +132,11 @@ This repo includes a `render.yaml` "Blueprint" that defines both services.
    variables in at build time, not at runtime).
 8. Once both redeploy successfully, open the client's URL, upload a test
    file, and confirm it appears in the list and downloads correctly.
+
+If you add `OCR_SPACE_API_KEY` to the server *after* some documents were
+already uploaded, click **Reprocess** next to them in the app instead of
+re-uploading — it re-runs extraction (including OCR) on the file already
+stored.
 
 ### Note on the free tier
 
@@ -135,9 +156,10 @@ audit-doc-analyzer/
 │   │   ├── app.js           Express app setup (CORS, routes, error handling)
 │   │   ├── db/mongo.js      MongoDB connection + GridFS bucket
 │   │   ├── middleware/      Error handling
-│   │   ├── routes/          /api/documents endpoints
+│   │   ├── routes/          /api/documents endpoints (including reprocess)
 │   │   └── services/
-│   │       └── textExtraction.js   docx/PDF/Excel text extraction
+│   │       ├── textExtraction.js   docx/PDF/Excel text extraction + OCR fallback
+│   │       └── ocrExtraction.js    OCR.space API client
 │   └── .env.example
 └── client/                  React + Vite frontend
     ├── src/
@@ -150,7 +172,7 @@ audit-doc-analyzer/
 
 ## What's next (future phases)
 
-- OCR for scanned PDFs and images
-- AI-assisted document classification and analysis (Gemini)
+- AI-assisted document classification and analysis (Gemini) — risk flags,
+  figure verification, SOP process walkthroughs
 - Word and Excel synopsis/export in your house style
 - Review/edit screen before export, and an audit trail

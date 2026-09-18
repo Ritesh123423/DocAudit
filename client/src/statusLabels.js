@@ -3,6 +3,7 @@ export const STATUS_LABELS = {
   uploaded: { label: "Uploaded", tone: "neutral" },
   extracted: { label: "Text extracted", tone: "success" },
   needs_ocr: { label: "Needs OCR", tone: "warning" },
+  ocr_failed: { label: "OCR failed", tone: "error" },
   extraction_unsupported: { label: "Format not supported yet", tone: "warning" },
   extraction_failed: { label: "Extraction failed", tone: "error" },
 };

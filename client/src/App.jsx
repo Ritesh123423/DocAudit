@@ -23,6 +23,17 @@ export default function App() {
     }
   }, []);
 
+  // Used after a reprocess completes: refreshes the list without flashing
+  // the "Loading documents..." state over the table the user is looking at.
+  const refreshDocumentsSilently = useCallback(async () => {
+    try {
+      const docs = await fetchDocuments();
+      setDocuments(docs);
+    } catch (err) {
+      setError(err.message || "Could not refresh documents.");
+    }
+  }, []);
+
   useEffect(() => {
     loadDocuments();
   }, [loadDocuments]);
@@ -46,6 +57,7 @@ export default function App() {
           isLoading={isLoading}
           error={error}
           onViewText={setSelectedDocumentId}
+          onReprocessed={refreshDocumentsSilently}
         />
       </section>
 

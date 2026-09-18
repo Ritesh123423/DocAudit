@@ -10,6 +10,20 @@ const router = express.Router();
 
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25MB
 
+/**
+ * Reads an entire GridFS file into a Buffer. Used by the reprocess endpoint,
+ * which needs the full file bytes rather than a stream to pipe to a response.
+ */
+function readGridfsFileAsBuffer(bucket, objectId) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    const downloadStream = bucket.openDownloadStream(objectId);
+    downloadStream.on("data", (chunk) => chunks.push(chunk));
+    downloadStream.on("error", reject);
+    downloadStream.on("end", () => resolve(Buffer.concat(chunks)));
+  });
+}
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_FILE_SIZE_BYTES },
@@ -80,10 +94,15 @@ router.post(
       uploadStream.end(req.file.buffer);
     });
 
-    // Extract text right away. This never throws for "needs OCR" or "unsupported
-    // format" cases — extractText() represents those as a status instead, so a
-    // slow or unusual file never breaks the upload response.
-    const extraction = await extractText({ buffer: req.file.buffer, mimeType: req.file.mimetype });
+    // Extract text right away, including an automatic OCR fallback for scanned
+    // PDFs/images. This never throws for "needs OCR", "unsupported format", or
+    // "OCR failed" cases — extractText() represents those as a status instead,
+    // so a slow or unusual file never breaks the upload response.
+    const extraction = await extractText({
+      buffer: req.file.buffer,
+      mimeType: req.file.mimetype,
+      originalFilename: req.file.originalname,
+    });
 
     const documentRecord = {
       documentId,
@@ -95,6 +114,7 @@ router.post(
       status: extraction.status,
       extractedText: extraction.text,
       extractionNote: extraction.note,
+      extractionMethod: extraction.extractionMethod,
       textExtractedAt: new Date().toISOString(),
     };
 
@@ -143,6 +163,49 @@ router.get(
     }
 
     res.json(doc);
+  })
+);
+
+/**
+ * POST /api/documents/:id/reprocess
+ * Re-runs text extraction (and OCR fallback) on a document's already-stored
+ * file. Use this to bring documents uploaded before a pipeline change (or
+ * before OCR/an API key was configured) up to date without re-uploading.
+ */
+router.post(
+  "/:id/reprocess",
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const bucket = getBucket();
+
+    const doc = await db.collection("documents").findOne({ documentId: req.params.id });
+
+    if (!doc) {
+      const err = new Error("Document not found");
+      err.status = 404;
+      err.publicMessage = "No document found with that id.";
+      throw err;
+    }
+
+    const buffer = await readGridfsFileAsBuffer(bucket, new ObjectId(doc.gridfsFileId));
+
+    const extraction = await extractText({
+      buffer,
+      mimeType: doc.mimeType,
+      originalFilename: doc.originalFilename,
+    });
+
+    const update = {
+      status: extraction.status,
+      extractedText: extraction.text,
+      extractionNote: extraction.note,
+      extractionMethod: extraction.extractionMethod,
+      textExtractedAt: new Date().toISOString(),
+    };
+
+    await db.collection("documents").updateOne({ documentId: req.params.id }, { $set: update });
+
+    res.json({ ...doc, ...update, _id: undefined });
   })
 );
 

@@ -48,6 +48,7 @@ export default function DocumentDetail({ documentId, onClose }) {
           <>
             <p>
               <span className={`status-badge status-${statusInfo.tone}`}>{statusInfo.label}</span>
+              {doc.extractionMethod === "ocr" && <span className="method-note"> (via OCR)</span>}
             </p>
 
             {doc.extractionNote && <p className="extraction-note">{doc.extractionNote}</p>}

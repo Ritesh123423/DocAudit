@@ -140,6 +140,12 @@ header h1 {
   text-decoration: underline;
 }
 
+.link-button:disabled {
+  color: #aaa;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
 .detail-overlay {
   position: fixed;
   inset: 0;
@@ -172,6 +178,11 @@ header h1 {
   margin: 0;
   font-size: 18px;
   word-break: break-word;
+}
+
+.method-note {
+  color: #888;
+  font-size: 13px;
 }
 
 .extraction-note {
