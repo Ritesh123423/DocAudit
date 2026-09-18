@@ -21,6 +21,11 @@ export async function fetchDocuments() {
   return parseJsonOrThrow(res);
 }
 
+export async function fetchDocument(documentId) {
+  const res = await fetch(`${API_BASE_URL}/api/documents/${documentId}`);
+  return parseJsonOrThrow(res);
+}
+
 export async function uploadDocument(file) {
   const formData = new FormData();
   formData.append("file", file);

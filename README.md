@@ -1,12 +1,22 @@
 # Audit Document Analyzer
 
-Phase 1: upload and storage plumbing. Upload a document (PDF, Word, Excel, or
-an image), it's stored in MongoDB (via GridFS, so no separate paid storage
-service is needed), and it shows up in a list where you can download it back.
+Upload a document (PDF, Word, Excel, or an image). It's stored in MongoDB
+(via GridFS, so no separate paid storage service is needed), and real text is
+pulled out automatically:
 
-Later phases add text extraction, OCR for scanned documents, AI-assisted
-analysis (classification, risk flags, figure verification, SOP process
-walkthroughs), and Word/Excel export.
+- **.docx** — extracted with Mammoth
+- **Native (text-based) PDF** — extracted with pdf-parse
+- **.xlsx** — every sheet's cell data extracted with ExcelJS
+- **Scanned PDFs, images, and legacy .doc/.xls** — flagged with a clear status
+  (`Needs OCR` or `Format not supported yet`) rather than failing silently.
+  OCR support for these is the next phase.
+
+Click **View text** on any document to see its extraction status and the
+extracted text itself.
+
+Later phases add OCR for scanned documents, AI-assisted analysis
+(classification, risk flags, figure verification, SOP process walkthroughs),
+and Word/Excel export.
 
 ## Stack
 
@@ -125,19 +135,21 @@ audit-doc-analyzer/
 │   │   ├── app.js           Express app setup (CORS, routes, error handling)
 │   │   ├── db/mongo.js      MongoDB connection + GridFS bucket
 │   │   ├── middleware/      Error handling
-│   │   └── routes/          /api/documents endpoints
+│   │   ├── routes/          /api/documents endpoints
+│   │   └── services/
+│   │       └── textExtraction.js   docx/PDF/Excel text extraction
 │   └── .env.example
 └── client/                  React + Vite frontend
     ├── src/
     │   ├── App.jsx
     │   ├── api.js            Fetch calls to the backend
-    │   └── components/       UploadForm, DocumentsTable
+    │   ├── statusLabels.js   Status → badge label/color mapping
+    │   └── components/       UploadForm, DocumentsTable, DocumentDetail
     └── .env.example
 ```
 
 ## What's next (future phases)
 
-- Text extraction from docx/PDF/Excel
 - OCR for scanned PDFs and images
 - AI-assisted document classification and analysis (Gemini)
 - Word and Excel synopsis/export in your house style

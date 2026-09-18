@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require("uuid");
 const { ObjectId } = require("mongodb");
 const { getDb, getBucket } = require("../db/mongo");
 const { asyncHandler } = require("../middleware/errorHandler");
+const { extractText } = require("../services/textExtraction");
 
 const router = express.Router();
 
@@ -79,6 +80,11 @@ router.post(
       uploadStream.end(req.file.buffer);
     });
 
+    // Extract text right away. This never throws for "needs OCR" or "unsupported
+    // format" cases — extractText() represents those as a status instead, so a
+    // slow or unusual file never breaks the upload response.
+    const extraction = await extractText({ buffer: req.file.buffer, mimeType: req.file.mimetype });
+
     const documentRecord = {
       documentId,
       originalFilename: req.file.originalname,
@@ -86,7 +92,10 @@ router.post(
       fileSizeBytes: req.file.size,
       gridfsFileId: gridfsFileId.toString(),
       uploadedAt: new Date().toISOString(),
-      status: "uploaded",
+      status: extraction.status,
+      extractedText: extraction.text,
+      extractionNote: extraction.note,
+      textExtractedAt: new Date().toISOString(),
     };
 
     await db.collection("documents").insertOne(documentRecord);
@@ -97,7 +106,8 @@ router.post(
 
 /**
  * GET /api/documents
- * Lists all documents, newest first.
+ * Lists all documents, newest first. Excludes extractedText to keep the
+ * list response small — fetch a single document for its full text.
  */
 router.get(
   "/",
@@ -105,7 +115,7 @@ router.get(
     const db = getDb();
     const docs = await db
       .collection("documents")
-      .find({}, { projection: { _id: 0 } })
+      .find({}, { projection: { _id: 0, extractedText: 0 } })
       .sort({ uploadedAt: -1 })
       .toArray();
 

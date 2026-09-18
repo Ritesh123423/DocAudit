@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import UploadForm from "./components/UploadForm.jsx";
 import DocumentsTable from "./components/DocumentsTable.jsx";
+import DocumentDetail from "./components/DocumentDetail.jsx";
 import { fetchDocuments } from "./api.js";
 
 export default function App() {
   const [documents, setDocuments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedDocumentId, setSelectedDocumentId] = useState(null);
 
   const loadDocuments = useCallback(async () => {
     setIsLoading(true);
@@ -39,8 +41,17 @@ export default function App() {
 
       <section className="card">
         <h2>Documents</h2>
-        <DocumentsTable documents={documents} isLoading={isLoading} error={error} />
+        <DocumentsTable
+          documents={documents}
+          isLoading={isLoading}
+          error={error}
+          onViewText={setSelectedDocumentId}
+        />
       </section>
+
+      {selectedDocumentId && (
+        <DocumentDetail documentId={selectedDocumentId} onClose={() => setSelectedDocumentId(null)} />
+      )}
     </div>
   );
 }
